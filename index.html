@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Froggy Kong -final Edition</title>
+    <meta name="description" content="Jogue Froggy Kong, um divertido jogo arcade retrô em 8-bits. Ajude Froggy a resgatar a galinha Cocoricó do Sapo Enorme!">
+
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background: #0f141d;
+            color: white;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        #game-container {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+        }
+        canvas {
+            background: #05070a;
+            display: block;
+            width: 100%;
+            border: 4px solid #4a5568;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+        #controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            max-width: 400px;
+            margin-top: 10px;
+            padding: 5px 15px;
+        }
+        
+        .joystick-container {
+            position: relative;
+            width: 110px;
+            height: 110px;
+            background: rgba(45, 55, 72, 0.5);
+            border: 3px solid #4a5568;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: none;
+        }
+        .joystick-knob {
+            position: absolute;
+            width: 45px;
+            height: 45px;
+            background: #4a5568;
+            border: 2px solid #cbd5e1;
+            border-radius: 50%;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            transition: transform 0.05s linear;
+        }
+
+        .center-menu {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .btn-shop {
+            background: #d97706;
+            color: white;
+            border: 2px solid #f59e0b;
+            font-weight: bold;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px #92400e;
+        }
+        .btn-shop:active {
+            transform: translateY(2px);
+            box-shadow: 0 2px #92400e;
+        }
+
+        /* --- NOVO: Estilos do Botão de Idioma --- */
+        .lang-container {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+        .btn-lang {
+            width: 100%;
+            background: #4b5563;
+            color: white;
+            border: 2px solid #6b7280;
+            font-size: 11px;
+            font-weight: bold;
+            padding: 6px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .lang-dropdown {
+            display: none;
+            position: absolute;
+            bottom: 100%;
+            left: 0;
+            width: 100%;
+            background: #1f2937;
+            border: 2px solid #4b5563;
+            border-radius: 6px;
+            box-shadow: 0 -4px 10px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+        .lang-dropdown button {
+            width: 100%;
+            background: none;
+            border: none;
+            color: white;
+            padding: 8px;
+            text-align: center;
+            font-family: monospace;
+            cursor: pointer;
+        }
+        .lang-dropdown button:hover {
+            background: #374151;
+        }
+        /* -------------------------------------- */
+
+        .action-container {
+            width: 110px;
+        }
+        .btn-jump {
+            background: #e53e3e;
+            color: #fff;
+            border: 2px solid #fc8181;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: manipulation;
+            box-shadow: 0 6px #9b2c2c;
+            width: 80px;
+            height: 80px;
+            margin-left: auto;
+        }
+        .btn-jump:active {
+            background: #c53030;
+            transform: translateY(4px);
+            box-shadow: 0 2px #9b2c2c;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas" width="400" height="500"></canvas>
+</div>
+
+<div id="controls">
+    <div class="joystick-container" id="joystick">
+        <div class="joystick-knob" id="knob"></div>
+    </div>
+    
+    <div class="center-menu">
+        <button class="btn-shop" id="btn-shop">🛒 SHOP (PAUSA)</button>
+        
+        <div class="lang-container" id="lang-container" style="display: none;">
+            <button class="btn-lang" id="btn-lang">言語/Language/Idioma</button>
+            <div class="lang-dropdown" id="lang-dropdown">
+                <button onclick="changeLanguage('pt')">Português</button>
+                <button onclick="changeLanguage('es')">Español</button>
+                <button onclick="changeLanguage('en')">English</button>
+                <button onclick="changeLanguage('ja')">日本語</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="action-container">
+        <button class="btn-jump" id="btn-jump">PULO</button>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+let audioCtx = null;
+let nextNoteTime = 0;
+let noteIndex = 0;
+let bpm = 130;
+
+let retroMode = false;
+
+// Sistema de Localização / Traduções
+let currentLang = 'pt';
+const translations = {
+    pt: {
+        shopTitle: "LOJA E DIÁLOGOS 🐾", points: "PONTOS: ", buyHammer: "🔨 COMPRAR MARTELO (100 PTS)",
+        acquired: "ADQUIRIDO", retroMode: "📺 MODO RETRÔ: ", activated: "ATIVADO", deactivated: "DESATIVADO",
+        askHammer: "💬 'O que o martelo faz?'", askWho: "💬 'Quem é você?'", fight: "💥 'seu sujo!' [LUTA]",
+        playMinigame: "🧶 JOGAR DESAFIO DO NOVELO", lockMinigame: "🔒 Vença o Sapo Enorme para abrir o minigame!",
+        diagHammer: "destroi 3 bolas de lama e depois se destroi", diagWho: "humilde vendedor, amigo do sapo enorme, mas nao como ajudante",
+        btnShop: "🛒 SHOP (PAUSA)", btnGame: "🎮 VOLTAR PRO JOGO", btnFlee: "🏳️ FUGIR DA BATALHA", btnExitMini: "🎮 SAIR DO MINIGAME",
+        clickStart: "CLIQUE EM PULO PARA INICIAR", introTitle: "HISTÓRIA: O SEQUESTRO",
+        intro1: "O temido SAPO ENORME raptou seu", intro2: "amado pet COCORICÓ por 4 mundos!",
+        intro3: "Pule as bolotas para ganhar +40 PTS!", intro4: "Compre o Martelo no Shop por 100 PTS!",
+        introBtn: "Aperte PULO para começar!", warningChase: "⚠️ PERSEGUIÇÃO DO SAPO ENORME! ⚠️", runFast: "💥 APERTE PULO RÁPIDO PARA CORRER! 💥",
+        gameOver: "FIM DE JOGO", restart: "Toque na tela para recomeçar", gameCleared: "🏆 JOGO ZERADO!", minigameUnl: "MINIGAME DE NOVELO LIBERADO NO SHOP!",
+        clickPlayAgain: "Clique para jogar de novo", bossName: "🐱 GATO ENORME BOSS", playerName: "🐸 FROGGY SEU SAPO",
+        battleStart: "O Gato Enorme ficou furioso com a sua audácia!", battleJump: "O Gato Enorme pulou do balcão! PREPARE-SE!",
+        whipTongue: " Língua Chicote (Ataque)", shield: " Guarda Escudo (Defesa)", spare: " Poupar 💖 (Pacifista)",
+        chooseCmd: "Escolha seu Comando (▲▼ / PULO):", waitingTurn: "⏳ AGUARDANDO TURNO DO ADVERSÁRIO...",
+        logWhip: "Você usou Língua Chicote e causou ", logWhipEnd: " de dano!", logWin: "💥 Incrível! Você derrotou o Gato Enorme e ganhou 300 PTS!",
+        logDef: "Você entrou em guarda defensiva para o próximo golpe!", logSpare: "💖 Você estendeu a mão. O Gato Enorme miou e aceitou a trégua! (+150 PTS)",
+        logCatAtk: "🐱 O Gato Enorme usou Arranhão Veloz e causou ", logCatAtkEnd: " de dano!",
+        yarns: "NOVELOS: ", progWorld: "MUNDO PROGRESSIVO: ", lives: "VIDAS: ", magnet: "🧲 ÍMÃ X3 (PULO):", activeJump: " ATIVE NO PULO!",
+        miniOver: "FIM DO MINIGAME", miniReach: "Mundo alcançado: ", miniTotal: "Pontuação total: ", clickReset: "Clique na tela para reiniciar",
+        btnJump: "PULO"
+    },
+    es: {
+        shopTitle: "TIENDA Y DIÁLOGOS 🐾", points: "PUNTOS: ", buyHammer: "🔨 COMPRAR MARTILLO (100 PTS)",
+        acquired: "ADQUIRIDO", retroMode: "📺 MODO RETRO: ", activated: "ACTIVADO", deactivated: "DESACTIVADO",
+        askHammer: "💬 '¿Qué hace el martillo?'", askWho: "💬 '¿Quién eres tú?'", fight: "💥 '¡sucio!' [LUCHA]",
+        playMinigame: "🧶 JUGAR DESAFÍO DE LA JALMA", lockMinigame: "🔒 ¡Vence al Sapo Enorme para abrir el juego!",
+        diagHammer: "destruye 3 bolas de barro y luego se destruye", diagWho: "humilde vendedor, amigo del sapo enorme, pero no como ayudante",
+        btnShop: "🛒 TIENDA (PAUSA)", btnGame: "🎮 VOLVER AL JUEGO", btnFlee: "🏳️ ESCAPAR DE LA BATALLA", btnExitMini: "🎮 SALIR DEL MINIJUEGO",
+        clickStart: "PRESIONA SALTO PARA INICIAR", introTitle: "HISTORIA: EL SECUESTRO",
+        intro1: "¡El temible SAPO ENORME secuestró a tu", intro2: "querida mascota COCORICÓ por 4 mundos!",
+        intro3: "¡Salta las bolas para ganar +40 PTS!", intro4: "¡Compra el Martillo en la Tienda por 100 PTS!",
+        introBtn: "¡Presiona SALTO para comenzar!", warningChase: "⚠️ ¡PERSECUCIÓN DEL SAPO ENORME! ⚠️", runFast: "💥 ¡PRESIONA SALTO RÁPIDO PARA CORRER! 💥",
+        gameOver: "FIN DEL JUEGO", restart: "Toca la pantalla para reiniciar", gameCleared: "🏆 ¡JUEGO TERMINADO!", minigameUnl: "¡MINIJUEGO DE JALMA LIBERADO EN LA TIENDA!",
+        clickPlayAgain: "Haz clic para jugar de nuevo", bossName: "🐱 GATO ENORME BOSS", playerName: "🐸 FROGGY TU SAPO",
+        battleStart: "¡El Gato Enorme se enfureció con tu audacia!", battleJump: "¡El Gato Enorme saltó del mostrador! ¡PREPÁRATE!",
+        whipTongue: " Lengua Látigo (Ataque)", shield: " Guardia Escudo (Defensa)", spare: " Perdonar 💖 (Pacifista)",
+        chooseCmd: "Elige tu Comando (▲▼ / SALTO):", waitingTurn: "⏳ ESPERANDO EL TURNO DEL RIVAL...",
+        logWhip: "¡Usaste Lengua Látigo e hiciste ", logWhipEnd: " de daño!", logWin: "💥 ¡Increíble! ¡Derrotaste al Gato Enorme y ganaste 300 PTS!",
+        logDef: "¡Entraste en guardia defensiva para el próximo golpe!", logSpare: "💖 ¡Extendiste tu mano. El Gato Enorme maulló y aceptó la tregua! (+150 PTS)",
+        logCatAtk: "🐱 ¡El Gato Enorme usó Arañazo Veloz e hizo ", logCatAtkEnd: " de daño!",
+        yarns: "OVILLOS: ", progWorld: "MUNDO PROGRESIVO: ", lives: "VIDAS: ", magnet: "🧲 IMÁN X3 (SALTO):", activeJump: " ¡ACTÍVALO AL SALTAR!",
+        miniOver: "FIN DEL MINIJUEGO", miniReach: "Mundo alcanzado: ", miniTotal: "Puntaje total: ", clickReset: "Haz clic en la pantalla para reiniciar",
+        btnJump: "SALTO"
+    },
+    en: {
+        shopTitle: "SHOP & DIALOGUES 🐾", points: "POINTS: ", buyHammer: "🔨 BUY HAMMER (100 PTS)",
+        acquired: "BOUGHT", retroMode: "📺 RETRO MODE: ", activated: "ON", deactivated: "OFF",
+        askHammer: "💬 'What does the hammer do?'", askWho: "💬 'Who are you?'", fight: "💥 'you filthy animal!' [FIGHT]",
+        playMinigame: "🧶 PLAY YARN CHALLENGE", lockMinigame: "🔒 Defeat Big Frog to unlock the minigame!",
+        diagHammer: "destroys 3 mud balls and then breaks itself", diagWho: "humble shopkeeper, friend of the big frog, but not his sidekick",
+        btnShop: "🛒 SHOP (PAUSE)", btnGame: "🎮 BACK TO GAME", btnFlee: "🏳️ FLEE BATTLE", btnExitMini: "🎮 EXIT MINIGAME",
+        clickStart: "PRESS JUMP TO START", introTitle: "STORY: THE KIDNAPPING",
+        intro1: "The fearsome BIG FROG kidnapped your", intro2: "beloved pet COCORICÓ through 4 worlds!",
+        intro3: "Jump over mudballs to get +40 PTS!", intro4: "Buy the Hammer in the Shop for 100 PTS!",
+        introBtn: "Press JUMP to start!", warningChase: "⚠️ BIG FROG IS CHASING YOU! ⚠️", runFast: "💥 MASH JUMP TO RUN FASTER! 💥",
+        gameOver: "GAME OVER", restart: "Tap screen to restart", gameCleared: "🏆 GAME CLEARED!", minigameUnl: "YARN MINIGAME UNLOCKED IN THE SHOP!",
+        clickPlayAgain: "Click to play again", bossName: "🐱 BIG CAT BOSS", playerName: "🐸 FROGGY YOUR FROG",
+        battleStart: "The Big Cat got furious at your audacity!", battleJump: "The Big Cat jumped off the counter! GET READY!",
+        whipTongue: " Tongue Whip (Attack)", shield: " Shield Guard (Defense)", spare: " Spare 💖 (Pacifist)",
+        chooseCmd: "Choose your Command (▲▼ / JUMP):", waitingTurn: "⏳ WAITING FOR ADVERSARY'S TURN...",
+        logWhip: "You used Tongue Whip and dealt ", logWhipEnd: " damage!", logWin: "💥 Incredible! You defeated the Big Cat and gained 300 PTS!",
+        logDef: "You entered a defensive stance for the next hit!", logSpare: "💖 You reached out. The Big Cat mewed and accepted truce! (+150 PTS)",
+        logCatAtk: "🐱 The Big Cat used Swift Scratch and dealt ", logCatAtkEnd: " damage!",
+        yarns: "YARNS: ", progWorld: "PROGRESSIVE WORLD: ", lives: "LIVES: ", magnet: "🧲 MAGNET X3 (JUMP):", activeJump: " ACTIVATE ON JUMP!",
+        miniOver: "MINIGAME OVER", miniReach: "World reached: ", miniTotal: "Total score: ", clickReset: "Click screen to restart",
+        btnJump: "JUMP"
+    },
+    ja: {
+        shopTitle: "ショップと会話 🐾", points: "ポイント: ", buyHammer: "🔨 ハンマーを購入 (100 PTS)",
+        acquired: "購入済み", retroMode: "📺 レトロモード: ", activated: "オン", deactivated: "オフ",
+        askHammer: "💬 「ハンマーは何をするの？」", askWho: "💬 「あなたはだれ？」", fight: "💥 「この泥棒猫め！」【戦闘】",
+        playMinigame: "🧶 毛糸玉チャレンジを遊ぶ", lockMinigame: "🔒 大カエルを倒すとミニゲームが解放されます！",
+        diagHammer: "泥の玉を3回破壊した後に壊れます", diagWho: "大カエルの友人である謙虚な商人、手下ではない",
+        btnShop: "🛒 ショップ (一時停止)", btnGame: "🎮 ゲームに戻る", btnFlee: "🏳️ 戦闘から逃げる", btnExitMini: "🎮 ミニゲーム終了",
+        clickStart: "ジャンプを押してスタート", introTitle: "ストーリー：誘拐",
+        intro1: "恐ろしい大カエルがあなたの愛する", intro2: "ペット「ココリコ」を4つの世界へ連れ去った！",
+        intro3: "泥玉を飛び越えて +40 PTS を獲得しよう！", intro4: "ショップで100 PTSのハンマーを買おう！",
+        introBtn: "ジャンプを押して開始！", warningChase: "⚠️ 大カエルの追跡！ ⚠️", runFast: "💥 ジャンプを連打して走れ！ 💥",
+        gameOver: "ゲームオーバー", restart: "画面をタッチして再開", gameCleared: "🏆 ゲームクリア！", minigameUnl: "毛糸玉ミニゲームがショップで解放！",
+        clickPlayAgain: "クリックしてもう一度遊ぶ", bossName: "🐱 巨大猫ボス", playerName: "🐸 フロッギー（あなた）",
+        battleStart: "巨大猫はあなたの不敵な態度に激怒している！", battleJump: "巨大猫がカウンターから飛び降りてきた！構えろ！",
+        whipTongue: " 舌のムチ（攻撃）", shield: " シールドガード（防御）", spare: " 見逃す 💖（平和主義）",
+        chooseCmd: "コマンド選択 (▲▼ / ジャンプ):", waitingTurn: "⏳ 相手のターンを待っています...",
+        logWhip: "舌のムチを使い、", logWhipEnd: " ダメージを与えた！", logWin: "💥 すごい！巨大猫を倒して300 PTS獲得！",
+        logDef: "次の攻撃に備えて防御姿勢をとった！", logSpare: "💖 手を差し伸べた。巨大猫は鳴いて和解を受け入れた！ (+150 PTS)",
+        logCatAtk: "🐱 巨大猫の高速ひっかき！ ", logCatAtkEnd: " ダメージを受けた！",
+        yarns: "毛糸玉: ", progWorld: "現在のワールド: ", lives: "ライフ: ", magnet: "🧲 磁石 X3 (ジャンプ):", activeJump: " ジャンプ中に発動！",
+        miniOver: "ミニゲーム終了", miniReach: "到達ワールド: ", miniTotal: "合計スコア: ", clickReset: "画面をクリックして再起動",
+        btnJump: "ジャンプ"
+    }
+};
+
+function changeLanguage(lang) {
+    currentLang = lang;
+    document.getElementById("btn-jump").innerText = translations[currentLang].btnJump;
+    updateShopButtonText();
+    document.getElementById("lang-dropdown").style.display = "none";
+}
+
+function updateShopButtonText() {
+    const sBtn = document.getElementById("btn-shop");
+    if (gameState === "SHOP") {
+        sBtn.innerText = translations[currentLang].btnGame;
+    } else if (gameState === "MINIGAME") {
+        sBtn.innerText = translations[currentLang].btnExitMini;
+    } else if (gameState === "BATTLE_CAT") {
+        sBtn.innerText = translations[currentLang].btnFlee;
+    } else {
+        sBtn.innerText = translations[currentLang].btnShop;
+    }
+}
+
+// Configuração do Dropdown Interativo
+const langBtn = document.getElementById("btn-lang");
+langBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const dropdown = document.getElementById("lang-dropdown");
+    dropdown.style.display = dropdown.style.display === "block" ? "none" : "block";
+});
+window.addEventListener("click", () => {
+    document.getElementById("lang-dropdown").style.display = "none";
+});
+
+// Estado de Diálogos da Loja
+let shopDialogue = "";
+let dialogueTimer = 0;
+
+function getCol(normalColor, type) {
+    if (!retroMode) return normalColor;
+    if (type === 'dark') return '#1f2e1a';   
+    if (type === 'mid') return '#52734d';    
+    return '#91b187';                        
+}
+
+const NOTE_C4 = 261.63, NOTE_D4 = 293.66, NOTE_E4 = 329.63, NOTE_F4 = 349.23, NOTE_G4 = 392.00, NOTE_A4 = 440.00, NOTE_B4 = 493.88;
+const NOTE_C5 = 523.25, NOTE_D5 = 587.33, NOTE_E5 = 659.25, NOTE_F5 = 698.46, NOTE_G5 = 783.99, NOTE_A5 = 880.00;
+const NOTE_A3 = 220.00, NOTE_F3 = 174.61, NOTE_G3 = 196.00, NOTE_E3 = 164.81;
+
+const introMelody = [NOTE_C4, NOTE_E4, NOTE_G4, NOTE_C5, NOTE_G4, NOTE_E4, NOTE_C4, 0];
+const gameMelody  = [NOTE_C4, NOTE_E4, NOTE_G4, NOTE_E4, NOTE_F4, NOTE_A4, NOTE_C5, NOTE_A4, NOTE_G4, NOTE_B4, NOTE_D5, NOTE_B4, NOTE_C5, 0, NOTE_C5, 0]; 
+const chaseMelody = [NOTE_A3, NOTE_A3, NOTE_C4, NOTE_A3, NOTE_D4, NOTE_A3, NOTE_E4, NOTE_D4, NOTE_F3, NOTE_F3, NOTE_A3, NOTE_F3, NOTE_G3, NOTE_E3, NOTE_A3, 0]; 
+const shopMelody  = [NOTE_E4, NOTE_A4, NOTE_B4, NOTE_C5, NOTE_B4, NOTE_A4, NOTE_E4, NOTE_D4, NOTE_F4, NOTE_A4, NOTE_D5, NOTE_C5, NOTE_B4, NOTE_A4, NOTE_E4, 0];
+const yarnMelody  = [NOTE_C5, NOTE_G4, NOTE_E4, NOTE_G4, NOTE_A4, NOTE_F4, NOTE_D4, NOTE_F4, NOTE_G4, NOTE_E4, NOTE_C4, NOTE_E4, NOTE_D4, NOTE_G4, NOTE_C5, 0];
+const victoryMelody = [NOTE_C4, NOTE_G4, NOTE_C4, NOTE_G4, NOTE_C5, NOTE_G4, NOTE_C5, NOTE_E5, NOTE_G5, 0, NOTE_G5, 0, NOTE_C5, 0, NOTE_C5, 0];
+const battleMelody = [NOTE_D4, NOTE_F4, NOTE_D4, NOTE_F4, NOTE_G4, NOTE_F4, NOTE_E4, 0, NOTE_C4, NOTE_E4, NOTE_C4, NOTE_E4, NOTE_F4, NOTE_E4, NOTE_D4, 0];
+
+function initAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        nextNoteTime = audioCtx.currentTime;
+    }
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+}
+
+function playTone(freq, type, duration, vol) {
+    if (!audioCtx || freq === 0) return;
+    try {
+        let osc = audioCtx.createOscillator();
+        let gainNode = audioCtx.createGain();
+        osc.type = retroMode ? 'square' : type; 
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gainNode.gain.setValueAtTime(vol, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+        osc.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+    } catch(e) {}
+}
+
+function playJumpSound() { initAudio(); playTone(160, 'square', 0.12, 0.2); setTimeout(() => playTone(320, 'square', 0.12, 0.2), 40); }
+function playFallSound() { initAudio(); playTone(90, 'sawtooth', 0.35, 0.3); }
+function playCoinSound() { initAudio(); playTone(600, 'sine', 0.08, 0.15); setTimeout(() => playTone(900, 'sine', 0.18, 0.15), 60); }
+function playHammerBreak() { initAudio(); playTone(180, 'triangle', 0.08, 0.3); playTone(380, 'sawtooth', 0.12, 0.2); }
+function playAlertSound() { initAudio(); playTone(700, 'sine', 0.04, 0.08); }
+function playMagnetSound() { initAudio(); playTone(200, 'sine', 0.4, 0.3); setTimeout(() => playTone(400, 'sine', 0.4, 0.2), 100); }
+
+function scheduler() {
+    if (!audioCtx) return;
+    while (nextNoteTime < audioCtx.currentTime + 0.1) {
+        let currentMelody = gameMelody;
+        let currentType = 'triangle';
+        let currentVol = 0.12;
+        
+        if (gameState === "INTRO") { 
+            currentMelody = introMelody; 
+            currentType = 'sine'; 
+        } else if (gameState === "SHOP") { 
+            currentMelody = shopMelody; 
+            currentType = 'sine'; 
+            currentVol = 0.10;
+        } else if (gameState === "MINIGAME") { 
+            currentMelody = yarnMelody; 
+            currentType = (noteIndex % 2 === 0) ? 'triangle' : 'sine'; 
+            currentVol = 0.14;
+        } else if (gameState === "BATTLE_CAT") {
+            currentMelody = battleMelody;
+            currentType = 'sawtooth';
+            currentVol = 0.12;
+        } else if (gameState === "VICTORY") {
+            currentMelody = victoryMelody;
+            currentType = 'square';
+            currentVol = 0.10;
+        } else if (gameState === "GAMEOVER") {
+            currentMelody = [NOTE_E3, 0, NOTE_E3, 0, NOTE_E3, 0, 0, 0];
+            currentType = 'sawtooth';
+            currentVol = 0.15;
+        } else if (gameState === "PLAYING") {
+            if (currentLevel === 4) { 
+                currentMelody = chaseMelody; 
+                currentType = 'sawtooth'; 
+                currentVol = 0.15;
+            } else {
+                currentMelody = gameMelody;
+                currentType = 'triangle';
+            }
+        }
+        
+        playTone(currentMelody[noteIndex], currentType, 0.22, currentVol);
+        noteIndex = (noteIndex + 1) % currentMelody.length;
+        
+        let secondsPerBeat = 60.0 / bpm;
+        nextNoteTime += 0.4 * secondsPerBeat; 
+    }
+}
+
+let gameState = "CLICK_TO_START";
+let currentLevel = 1;
+let score = 0;
+let gameOver = false;
+let victory = false;
+let animationTimer = 0;
+let gameUnlocked = false;
+let projectileIdCounter = 0;
+
+let hasHammer = false;
+let hammerUses = 0;
+
+const TIME_LIMIT = 22;
+let timeLeft = TIME_LIMIT;
+let lastTime = performance.now();
+
+const player = { x: 50, y: 440, width: 16, height: 24, speed: 2.1, vx: 0, vy: 0, jumping: false, grounded: true, facingLeft: false };
+const bigFrog = { x: 40, y: 50, width: 70, height: 50, throwCooldown: 0, frame: 0, speedX: 1 };
+const bigChicken = { x: 130, y: 55, width: 45, height: 45, frame: 0 };
+
+let platforms = [];
+let ladders = [];
+let projectiles = [];
+const keys = { left: false, right: false, up: false, down: false };
+
+const minigame = { yarns: [], score: 0, spawnTimer: 0, gameOver: false, lives: 5, level: 1, magnetProgress: 0, platforms: [], ladders: [] };
+
+// Sistema de Batalha contra o Gato Enorme
+const catBattle = {
+    catHp: 150,
+    catMaxHp: 150,
+    playerHp: 60,
+    playerMaxHp: 60,
+    turn: "PLAYER", 
+    selectedOption: 0, 
+    battleLog: "",
+    timer: 0,
+    spared: false 
+};
+catBattle.battleLog = translations[currentLang].battleStart;
+
+function loadLevel(lvl) {
+    projectiles = []; player.vx = 0; player.vy = 0; player.jumping = false; player.grounded = true; timeLeft = TIME_LIMIT;
+
+    if (lvl === 1) {
+        player.x = 50; player.y = 440; bigFrog.x = 40; bigFrog.y = 50; bigChicken.x = 140; bigChicken.y = 55;
+        platforms = [
+            { x: 0, y: 480, width: 400, height: 20 }, { x: 0, y: 390, width: 330, height: 15 },
+            { x: 70, y: 300, width: 330, height: 15 }, { x: 0, y: 210, width: 330, height: 15 },
+            { x: 70, y: 120, width: 330, height: 15 }, { x: 40, y: 100, width: 180, height: 15 }
+        ];
+        ladders = [ { x: 300, y: 390, width: 18, height: 90 }, { x: 80, y: 300, width: 18, height: 90 }, { x: 300, y: 210, width: 18, height: 90 }, { x: 80, y: 120, width: 18, height: 90 } ];
+    } 
+    else if (lvl === 2) {
+        player.x = 330; player.y = 440; bigFrog.x = 280; bigFrog.y = 50; bigChicken.x = 60; bigChicken.y = 55;
+        platforms = [
+            { x: 0, y: 480, width: 400, height: 20 }, { x: 70, y: 390, width: 330, height: 15 },
+            { x: 0, y: 300, width: 330, height: 15 }, { x: 70, y: 210, width: 330, height: 15 },
+            { x: 0, y: 120, width: 330, height: 15 }, { x: 30, y: 100, width: 340, height: 15 }
+        ];
+        ladders = [ { x: 90, y: 390, width: 18, height: 90 }, { x: 300, y: 300, width: 18, height: 90 }, { x: 90, y: 210, width: 18, height: 90 }, { x: 300, y: 120, width: 18, height: 90 } ];
+    } 
+    else if (lvl === 3) {
+        player.x = 190; player.y = 440; bigFrog.x = 40; bigFrog.y = 50; bigChicken.x = 240; bigChicken.y = 85;
+        platforms = [
+            { x: 0, y: 480, width: 400, height: 20 }, { x: 40, y: 400, width: 320, height: 15 },
+            { x: 0, y: 310, width: 150, height: 15 }, { x: 250, y: 310, width: 150, height: 15 },
+            { x: 50, y: 220, width: 300, height: 15 }, { x: 0, y: 130, width: 400, height: 15 }
+        ];
+        ladders = [
+            { x: 190, y: 400, width: 18, height: 80 }, { x: 60, y: 310, width: 18, height: 90 }, { x: 320, y: 310, width: 18, height: 90 },
+            { x: 120, y: 220, width: 18, height: 90 }, { x: 260, y: 220, width: 18, height: 90 }, { x: 195, y: 130, width: 18, height: 90 }
+        ];
+    } 
+    else if (lvl === 4) {
+        player.x = 192; player.y = 356; bigFrog.x = -130; bigFrog.y = 330; bigChicken.x = 340; bigChicken.y = 335;
+        timeLeft = 14; platforms = [ { x: 0, y: 380, width: 400, height: 120 } ]; ladders = [];
+    }
+}
+
+function startCatBattle() {
+    initAudio();
+    noteIndex = 0;
+    gameState = "BATTLE_CAT";
+    catBattle.catHp = 150;
+    catBattle.playerHp = 60;
+    catBattle.turn = "PLAYER";
+    catBattle.selectedOption = 0;
+    catBattle.battleLog = translations[currentLang].battleJump;
+    catBattle.spared = false;
+    updateShopButtonText();
+    document.getElementById("lang-container").style.display = "none";
+}
+
+function updateMinigameLayout() {
+    if (minigame.score <= 10) {
+        minigame.level = 1; minigame.platforms = [{ x: 0, y: 470, width: 400, height: 30 }]; minigame.ladders = [];
+    } else if (minigame.score <= 20) {
+        minigame.level = 2;
+        minigame.platforms = [{ x: 0, y: 470, width: 400, height: 30 }, { x: 20, y: 380, width: 100, height: 15 }, { x: 280, y: 380, width: 100, height: 15 }];
+        minigame.ladders = [ { x: 60, y: 380, width: 18, height: 90 }, { x: 320, y: 380, width: 18, height: 90 } ];
+    } else {
+        minigame.level = 3;
+        minigame.platforms = [{ x: 0, y: 470, width: 400, height: 30 }, { x: 20, y: 380, width: 100, height: 15 }, { x: 280, y: 380, width: 100, height: 15 }, { x: 120, y: 290, width: 160, height: 15 }];
+        minigame.ladders = [ { x: 60, y: 380, width: 18, height: 90 }, { x: 320, y: 380, width: 18, height: 90 }, { x: 190, y: 290, width: 18, height: 180 } ];
+    }
+}
+
+function startMinigame() {
+    initAudio(); noteIndex = 0; gameState = "MINIGAME"; minigame.yarns = []; minigame.score = 0; minigame.spawnTimer = 0; minigame.gameOver = false; minigame.lives = 5; minigame.magnetProgress = 0; 
+    player.x = 190; player.y = 440; player.vx = 0; player.vy = 0; player.jumping = false; player.grounded = true;
+    updateMinigameLayout(); updateShopButtonText();
+    document.getElementById("lang-container").style.display = "none";
+}
+
+function triggerMagnet() {
+    if (minigame.magnetProgress < 100 || minigame.gameOver) return false;
+    let activeYarns = minigame.yarns.filter(y => y.alertTicks <= 0);
+    if (activeYarns.length > 0) {
+        activeYarns.sort((a, b) => {
+            let distA = Math.abs(a.x - (player.x + 8)) + Math.abs(a.y - (player.y + 12));
+            let distB = Math.abs(b.x - (player.x + 8)) + Math.abs(b.y - (player.y + 12));
+            return distA - distB;
+        });
+        let targets = activeYarns.slice(0, 3);
+        for(let target of targets) {
+            let index = minigame.yarns.indexOf(target);
+            if (index !== -1) { minigame.yarns.splice(index, 1); minigame.score++; }
+        }
+        playMagnetSound(); minigame.magnetProgress = 0; updateMinigameLayout(); return true;
+    }
+    return false;
+}
+
+window.addEventListener("keydown", (e) => {
+    if (gameState === "PLAYING" || gameState === "MINIGAME") {
+        if (e.key === "ArrowLeft") keys.left = true; if (e.key === "ArrowRight") keys.right = true;
+        if (e.key === "ArrowUp") keys.up = true; if (e.key === "ArrowDown") keys.down = true;
+        if (e.key === " " || e.key === "ArrowUp") { e.preventDefault(); handleAction(); }
+    } else if (gameState === "BATTLE_CAT" && catBattle.turn === "PLAYER") {
+        if (e.key === "ArrowUp") { catBattle.selectedOption = (catBattle.selectedOption - 1 + 3) % 3; }
+        if (e.key === "ArrowDown") { catBattle.selectedOption = (catBattle.selectedOption + 1) % 3; }
+        if (e.key === " ") { e.preventDefault(); handleAction(); }
+    }
+});
+window.addEventListener("keyup", (e) => {
+    if (e.key === "ArrowLeft") keys.left = false; if (e.key === "ArrowRight") keys.right = false;
+    if (e.key === "ArrowUp") keys.up = false; if (e.key === "ArrowDown") keys.down = false;
+});
+
+const joystick = document.getElementById("joystick");
+const knob = document.getElementById("knob");
+let joystickActive = false; let joystickStartX = 0; let joystickStartY = 0;
+
+function activateJoystick(clientX, clientY) {
+    initAudio(); 
+    if (gameState === "BATTLE_CAT" && catBattle.turn === "PLAYER") {
+        joystickActive = true;
+        return;
+    }
+    if (gameState !== "PLAYING" && gameState !== "MINIGAME") return;
+    joystickActive = true; const rect = joystick.getBoundingClientRect();
+    joystickStartX = rect.left + rect.width / 2; joystickStartY = rect.top + rect.height / 2;
+    handleJoystickMove(clientX, clientY);
+}
+
+joystick.addEventListener("touchstart", (e) => { e.preventDefault(); activateJoystick(e.touches[0].clientX, e.touches[0].clientY); });
+window.addEventListener("touchmove", (e) => { if (joystickActive) handleJoystickMove(e.touches[0].clientX, e.touches[0].clientY); });
+window.addEventListener("touchend", () => { deactivateJoystick(); });
+joystick.addEventListener("mousedown", (e) => { activateJoystick(e.clientX, e.clientY); });
+window.addEventListener("mousemove", (e) => { if (joystickActive) handleJoystickMove(e.clientX, e.clientY); });
+window.addEventListener("mouseup", () => { deactivateJoystick(); });
+
+function deactivateJoystick() {
+    if (!joystickActive) return; joystickActive = false; knob.style.transform = `translate(0px, 0px)`;
+    keys.left = false; keys.right = false; keys.up = false; keys.down = false;
+}
+
+function handleJoystickMove(clientX, clientY) {
+    if (gameState === "BATTLE_CAT") {
+        let deltaY = clientY - joystickStartY;
+        if (deltaY < -20) catBattle.selectedOption = 0;
+        else if (deltaY > 20) catBattle.selectedOption = 2;
+        else if (Math.abs(deltaY) <= 20) catBattle.selectedOption = 1;
+        return;
+    }
+    let deltaX = clientX - joystickStartX; let deltaY = clientY - joystickStartY;
+    let distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY); const maxRadius = 35; 
+    if (distance > maxRadius) { deltaX = (deltaX / distance) * maxRadius; deltaY = (deltaY / distance) * maxRadius; }
+    knob.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+    keys.left = deltaX < -22; keys.right = deltaX > 22; keys.up = deltaY < -22; keys.down = deltaY > 22;
+}
+
+const shopBtn = document.getElementById("btn-shop");
+shopBtn.addEventListener("click", () => {
+    initAudio(); noteIndex = 0; shopDialogue = ""; dialogueTimer = 0;
+    if (gameState === "PLAYING") { 
+        gameState = "SHOP"; 
+        document.getElementById("lang-container").style.display = "inline-block"; 
+    } 
+    else if (gameState === "SHOP" || gameState === "MINIGAME" || gameState === "BATTLE_CAT") { 
+        gameState = "PLAYING"; 
+        document.getElementById("lang-container").style.display = "none"; 
+        lastTime = performance.now(); 
+    }
+    updateShopButtonText();
+});
+
+document.getElementById("btn-jump").addEventListener("click", () => handleAction());
+document.getElementById("btn-jump").addEventListener("touchstart", (e) => { e.preventDefault(); handleAction(); });
+
+function handleAction() {
+    initAudio();
+    if (gameState === "CLICK_TO_START") { gameState = "INTRO"; }
+    else if (gameState === "INTRO") { gameState = "PLAYING"; loadLevel(1); lastTime = performance.now(); }
+    else if (gameState === "MINIGAME") {
+        if (minigame.magnetProgress >= 100) { triggerMagnet(); } else { jump(); }
+    }
+    else if (gameState === "PLAYING") { 
+        if (currentLevel === 4) { player.x += 16; playJumpSound(); } else { jump(); } 
+    }
+    else if (gameState === "BATTLE_CAT" && catBattle.turn === "PLAYER") {
+        executeBattleTurn();
+    }
+}
+
+function executeBattleTurn() {
+    if (catBattle.selectedOption === 0) { 
+        let damage = Math.floor(Math.random() * 12) + 15;
+        catBattle.catHp -= damage;
+        catBattle.battleLog = translations[currentLang].logWhip + damage + translations[currentLang].logWhipEnd;
+        playHammerBreak();
+        
+        if (catBattle.catHp <= 0) {
+            catBattle.catHp = 0;
+            catBattle.battleLog = translations[currentLang].logWin;
+            catBattle.turn = "MESSAGE_PAUSE";
+            catBattle.timer = 90;
+        } else {
+            catBattle.turn = "CAT_ATTACKING";
+            catBattle.timer = 60;
+        }
+    } else if (catBattle.selectedOption === 1) { 
+        catBattle.battleLog = translations[currentLang].logDef;
+        playMagnetSound();
+        catBattle.turn = "CAT_ATTACKING";
+        catBattle.timer = 60;
+    } else { 
+        catBattle.battleLog = translations[currentLang].logSpare;
+        playCoinSound();
+        catBattle.spared = true;
+        catBattle.turn = "MESSAGE_PAUSE";
+        catBattle.timer = 90;
+    }
+}
+
+canvas.addEventListener("click", (e) => {
+    initAudio();
+    const rect = canvas.getBoundingClientRect();
+    const clickX = ((e.clientX - rect.left) / rect.width) * canvas.width;
+    const clickY = ((e.clientY - rect.top) / rect.height) * canvas.height;
+
+    if (gameState === "SHOP") {
+        if (clickX >= 50 && clickX <= 350 && clickY >= 145 && clickY <= 187) {
+            if (score >= 100 && !hasHammer) { score -= 100; hasHammer = true; hammerUses = 3; playCoinSound(); } 
+            else if (score < 100) { playFallSound(); }
+        }
+        if (clickX >= 50 && clickX <= 350 && clickY >= 195 && clickY <= 237) {
+            retroMode = !retroMode; playCoinSound();
+        }
+        if (clickX >= 50 && clickX <= 350 && clickY >= 245 && clickY <= 283) {
+            shopDialogue = translations[currentLang].diagHammer; dialogueTimer = 180; playCoinSound();
+        }
+        if (clickX >= 50 && clickX <= 350 && clickY >= 290 && clickY <= 328) {
+            shopDialogue = translations[currentLang].diagWho; dialogueTimer = 220; playCoinSound();
+        }
+        if (clickX >= 50 && clickX <= 350 && clickY >= 335 && clickY <= 373) {
+            startCatBattle();
+        }
+        if (gameUnlocked && clickX >= 50 && clickX <= 350 && clickY >= 385 && clickY <= 430) { startMinigame(); }
+    }
+    
+    if (minigame.gameOver && gameState === "MINIGAME") { startMinigame(); }
+    if (gameState === "GAMEOVER" || gameState === "VICTORY") resetGame();
+});
+
+function jump() { if (!player.jumping && player.grounded) { player.jumping = true; player.grounded = false; player.vy = -4.7; playJumpSound(); } }
+
+function insideLadder() {
+    let currentLadders = gameState === "MINIGAME" ? minigame.ladders : ladders;
+    for (let l of currentLadders) { if (player.x + player.width > l.x && player.x < l.x + l.width && player.y + player.height > l.y && player.y < l.y + l.height) return l; }
+    return null;
+}
+
+function update(now) {
+    animationTimer++; scheduler();
+    if (gameState === "SHOP" && dialogueTimer > 0) dialogueTimer--;
+
+    if (gameState === "BATTLE_CAT") {
+        if (catBattle.turn === "CAT_ATTACKING" || catBattle.turn === "MESSAGE_PAUSE") {
+            catBattle.timer--;
+            if (catBattle.timer <= 0) {
+                if (catBattle.catHp <= 0 || catBattle.spared) {
+                    score += catBattle.spared ? 150 : 300;
+                    gameState = "SHOP";
+                    updateShopButtonText();
+                    document.getElementById("lang-container").style.display = "inline-block";
+                } else if (catBattle.playerHp <= 0) {
+                    gameState = "GAMEOVER";
+                    playFallSound();
+                    noteIndex = 0;
+                } else {
+                    let isDefending = catBattle.selectedOption === 1;
+                    let catDamage = Math.floor(Math.random() * 8) + 10;
+                    if (isDefending) catDamage = Math.floor(catDamage / 3);
+                    
+                    catBattle.playerHp -= catDamage;
+                    catBattle.battleLog = translations[currentLang].logCatAtk + catDamage + translations[currentLang].logCatAtkEnd;
+                    playFallSound();
+                    catBattle.turn = "PLAYER";
+                }
+            }
+        }
+        return;
+    }
+
+    if (gameState === "MINIGAME") {
+        if (minigame.gameOver) return;
+        if (minigame.magnetProgress < 100) { minigame.magnetProgress += (100 / (20 * 60)); if (minigame.magnetProgress > 100) minigame.magnetProgress = 100; }
+
+        let minigameSpeed = 3.5;
+        if (!player.jumping) {
+            if (keys.left) { player.vx = -minigameSpeed; player.facingLeft = true; } 
+            else if (keys.right) { player.vx = minigameSpeed; player.facingLeft = false; } 
+            else player.vx = 0;
+
+            let ladder = insideLadder();
+            if (ladder) {
+                if (keys.up) { player.y -= 2.2; player.vy = 0; player.grounded = true; } 
+                else if (keys.down) { player.y += 2.2; player.vy = 0; player.grounded = true; }
+            }
+            if (!ladder || (!keys.up && !keys.down)) player.vy += 0.25;
+        } else { player.vy += 0.25; }
+        
+        player.x += player.vx; player.y += player.vy;
+        if (player.x < 10) player.x = 10; if (player.x + player.width > canvas.width - 10) player.x = canvas.width - 10 - player.width;
+        
+        player.grounded = false;
+        for (let p of minigame.platforms) {
+            if (player.x + player.width > p.x && player.x < p.x + p.width && player.y + player.height >= p.y && player.y + player.height - player.vy <= p.y + 6) {
+                player.y = p.y - player.height; player.vy = 0; player.jumping = false; player.grounded = true;
+            }
+        }
+
+        minigame.spawnTimer++;
+        if (minigame.spawnTimer > 85) { 
+            let spawnX = Math.random() * 340 + 30; minigame.yarns.push({ x: spawnX, y: 135, radius: 8, speedY: 1.5 + Math.random() * 0.8, alertTicks: 35 }); 
+            minigame.spawnTimer = 0; playAlertSound();
+        }
+        
+        for (let i = minigame.yarns.length - 1; i >= 0; i--) {
+            let y = minigame.yarns[i]; if (y.alertTicks > 0) { y.alertTicks--; continue; }
+            y.y += y.speedY;
+            let distX = Math.abs(y.x - (player.x + player.width/2)); let distY = Math.abs(y.y - (player.y + player.height/2));
+            if (distX < y.radius + player.width/2 && distY < y.radius + player.height/2) { 
+                minigame.yarns.splice(i, 1); minigame.score++; updateMinigameLayout(); playCoinSound(); continue; 
+            }
+            if (y.y > 470) { 
+                minigame.yarns.splice(i, 1); minigame.lives--; playFallSound(); if (minigame.lives <= 0) minigame.gameOver = true;
+            }
+        }
+        return;
+    }
+
+    if (gameState !== "PLAYING") return;
+
+    let deltaTime = (now - lastTime) / 1000; lastTime = now; timeLeft -= deltaTime;
+    if (timeLeft <= 0) { timeLeft = 0; gameState = "GAMEOVER"; playFallSound(); noteIndex = 0;}
+
+    let standingOnLadder = insideLadder() !== null;
+    if (player.x + player.width > bigChicken.x && player.x < bigChicken.x + bigChicken.width && player.y + player.height > bigChicken.y && player.y < bigChicken.y + bigChicken.height) {
+        playCoinSound(); if (currentLevel < 4) { currentLevel++; loadLevel(currentLevel); } else { victory = true; gameUnlocked = true; gameState = "VICTORY"; noteIndex = 0; } return;
+    }
+
+    if (currentLevel === 4) {
+        bigFrog.x += 0.8; player.x -= 0.65;    
+        if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+        if (bigFrog.x + bigFrog.width - 15 >= player.x) { gameState = "GAMEOVER"; playFallSound(); noteIndex = 0;} return; 
+    }
+
+    if (!player.jumping) {
+        if (keys.left) { player.vx = -player.speed; player.facingLeft = true; } else if (keys.right) { player.vx = player.speed; player.facingLeft = false; } else player.vx = 0;
+        let ladder = insideLadder();
+        if (ladder) { if (keys.up) { player.y -= 2; player.vy = 0; player.grounded = true; } else if (keys.down) { player.y += 2; player.vy = 0; player.grounded = true; } }
+        if (!ladder || (!keys.up && !keys.down)) player.vy += 0.25;
+    } else { player.vy += 0.25; }
+
+    player.x += player.vx; player.y += player.vy;
+    if (player.x < 0) player.x = 0; if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+
+    player.grounded = false;
+    for (let p of platforms) {
+        if (player.x + player.width > p.x && player.x < p.x + p.width && player.y + player.height >= p.y && player.y + player.height - player.vy <= p.y + 6) {
+            player.y = p.y - player.height; player.vy = 0; player.vx = 0; player.jumping = false; player.grounded = true;
+        }
+    }
+
+    bigFrog.throwCooldown++;
+    let spawnRate = currentLevel === 3 ? 90 : 130; 
+    if (bigFrog.throwCooldown > spawnRate) {
+        bigFrog.frame = 1; projectileIdCounter++;
+        projectiles.push({ id: projectileIdCounter, x: bigFrog.x + bigFrog.width - 10, y: bigFrog.y + 35, radius: 7, speedX: currentLevel === 2 ? 2.6 : 2.2, currentPlat: 4, scored: false });
+        bigFrog.throwCooldown = 0; setTimeout(() => bigFrog.frame = 0, 400);
+    }
+
+    bigChicken.frame = (animationTimer % 40 < 20) ? 0 : 1;
+
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+        let b = projectiles[i]; b.x += b.speedX;
+        if (b.x > canvas.width - 15 && b.currentPlat === 4) { b.speedX = -2.2; b.y = 200; b.currentPlat = 3; }
+        else if (b.x < 15 && b.currentPlat === 3) { b.speedX = 2.2; b.y = 290; b.currentPlat = 2; }
+        else if (b.x > canvas.width - 15 && b.currentPlat === 2) { b.speedX = -2.2; b.y = 380; b.currentPlat = 1; }
+        else if (b.x < 15 && b.currentPlat === 1) { b.speedX = 2.2; b.y = 470; b.currentPlat = 0; }
+        if (b.x > canvas.width + 20 || b.x < -20) { projectiles.splice(i, 1); continue; }
+
+        let pCenterX = player.x + player.width / 2; let pCenterY = player.y + player.height / 2;
+        let playerFootY = player.y + player.height; let verticalDistance = b.y - playerFootY; let horizontalDistance = Math.abs(pCenterX - b.x);
+
+        if (!b.scored && !standingOnLadder) {
+            if (verticalDistance >= 0 && verticalDistance <= 10 && horizontalDistance <= 25) { score += 40; b.scored = true; playCoinSound(); }
+        }
+
+        let distX = Math.abs(b.x - pCenterX); let distY = Math.abs(b.y - pCenterY);
+        if (distX < b.radius + player.width/2 && distY < b.radius + player.height/2) {
+            if (hasHammer) { projectiles.splice(i, 1); hammerUses--; playHammerBreak(); if (hammerUses <= 0) hasHammer = false; } 
+            else { gameState = "GAMEOVER"; playFallSound(); noteIndex = 0;}
+        }
+    }
+}
+
+function drawPlayer(x, y) {
+    if (hasHammer && gameState !== "MINIGAME") { 
+        ctx.strokeStyle = getCol("#fbbf24", 'light'); 
+        ctx.lineWidth = 2; 
+        ctx.strokeRect(x - 4, y - 4, player.width + 8, player.height + 8); 
+    }
+    ctx.fillStyle = getCol("#22c55e", 'mid'); ctx.fillRect(x, y + 6, 16, 14); 
+    ctx.fillStyle = getCol("#bbf7d0", 'light'); ctx.fillRect(x + 3, y + 12, 10, 8);
+    ctx.fillStyle = getCol("#22c55e", 'mid'); ctx.fillRect(x + 1, y, 5, 6); ctx.fillRect(x + 10, y, 5, 6);  
+    ctx.fillStyle = getCol("#ffffff", 'light'); ctx.fillRect(x + 2, y + 1, 3, 3); ctx.fillRect(x + 11, y + 1, 3, 3);
+    ctx.fillStyle = getCol("#000000", 'dark');
+    let eyeLook = player.facingLeft ? 0 : 2;
+    ctx.fillRect(x + 2 + eyeLook, y + 1, 1, 2); ctx.fillRect(x + 11 + eyeLook, y + 1, 1, 2);
+    ctx.fillStyle = getCol("#16a34a", 'dark'); ctx.fillRect(x - 2, y + 14, 3, 8); ctx.fillRect(x + 15, y + 14, 3, 8);
+    ctx.fillRect(x - 2, y + 21, 5, 3); ctx.fillRect(x + 13, y + 21, 5, 3);
+}
+
+function drawGatoEnorme(x, y) {
+    let offsetAnim = Math.sin(animationTimer * 0.15) * 2;
+    ctx.fillStyle = getCol("#4b5563", 'dark'); ctx.fillRect(x - 10, y + 45 + (offsetAnim * 1.5), 14, 10);
+    ctx.fillStyle = getCol("#6b7280", 'mid'); ctx.fillRect(x, y + (offsetAnim * 0.5), 80, 70 - (offsetAnim * 0.5)); 
+    ctx.fillStyle = getCol("#4b5563", 'dark'); ctx.fillRect(x + 10, y - 20 + (offsetAnim * 0.5), 20, 20); ctx.fillRect(x + 50, y - 20 + (offsetAnim * 0.5), 20, 20); 
+    ctx.fillStyle = getCol("#ffffff", 'light'); ctx.fillRect(x + 15, y + 10 + (offsetAnim * 0.5), 10, 10); ctx.fillRect(x + 55, y + 10 + (offsetAnim * 0.5), 10, 10); 
+    let eyeOffset = 0;
+    if (gameState === "MINIGAME" && minigame.yarns.length > 0) {
+        let targetYarn = minigame.yarns[0]; if (targetYarn.x < x + 40) eyeOffset = -2; else if (targetYarn.x > x + 40) eyeOffset = 2; 
+    }
+    ctx.fillStyle = getCol("#000000", 'dark'); ctx.fillRect(x + 19 + eyeOffset, y + 14 + (offsetAnim * 0.5), 4, 4); ctx.fillRect(x + 59 + eyeOffset, y + 14 + (offsetAnim * 0.5), 4, 4);
+    if (gameState === "SHOP" && dialogueTimer > 0 && animationTimer % 14 < 7) {
+        ctx.fillStyle = getCol("#7f1d1d", 'dark'); ctx.fillRect(x + 32, y + 25 + (offsetAnim * 0.5), 16, 12); 
+    } else { ctx.fillStyle = getCol("#f43f5e", 'light'); ctx.fillRect(x + 36, y + 25 + (offsetAnim * 0.5), 8, 5); }
+}
+
+function drawShop() {
+    let t = translations[currentLang];
+    ctx.fillStyle = getCol("#1e1b4b", 'dark'); ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = getCol("#f59e0b", 'light'); ctx.font = "bold 15px 'Courier New'"; ctx.fillText(t.shopTitle, 110, 25);
+    drawGatoEnorme(160, 60); ctx.fillStyle = getCol("#78350f", 'mid'); ctx.fillRect(40, 130, 320, 6);
+    ctx.fillStyle = getCol("#ffffff", 'light'); ctx.font = "bold 13px 'Courier New'"; ctx.fillText(t.points + score, 155, 142);
+
+    if (dialogueTimer > 0 && shopDialogue !== "") {
+        ctx.fillStyle = getCol("#ffffff", 'light'); ctx.fillRect(30, 80, 120, 45);
+        ctx.fillStyle = getCol("#000000", 'dark'); ctx.font = "bold 9px 'Courier New'";
+        if(shopDialogue.length > 25) {
+            ctx.fillText(shopDialogue.substring(0, 22) + "-", 34, 97); ctx.fillText(shopDialogue.substring(22, 45), 34, 112);
+        } else { ctx.fillText(shopDialogue, 34, 105); }
+    }
+
+    ctx.strokeStyle = getCol("#4b5563", 'mid'); ctx.lineWidth = 2; ctx.strokeRect(50, 150, 300, 38);
+    ctx.fillStyle = getCol("#fbbf24", 'light'); ctx.font = "bold 11px 'Courier New'"; ctx.fillText(t.buyHammer, 60, 173);
+    if (hasHammer) { ctx.fillStyle = getCol("#9ca3af", 'light'); ctx.fillText(t.acquired + " (" + hammerUses + ")", 250, 173); }
+
+    ctx.strokeStyle = getCol("#4b5563", 'mid'); ctx.strokeRect(50, 195, 300, 38);
+    ctx.fillStyle = getCol("#38bdf8", 'light'); ctx.font = "bold 11px 'Courier New'"; ctx.fillText(t.retroMode + (retroMode ? t.activated : t.deactivated), 60, 218);
+
+    ctx.strokeStyle = getCol("#10b981", 'mid'); ctx.strokeRect(50, 240, 300, 34);
+    ctx.fillStyle = getCol("#ffffff", 'light'); ctx.font = "11px 'Courier New'"; ctx.fillText(t.askHammer, 60, 261);
+
+    ctx.strokeStyle = getCol("#10b981", 'mid'); ctx.strokeRect(50, 285, 300, 34);
+    ctx.fillStyle = getCol("#ffffff", 'light'); ctx.font = "11px 'Courier New'"; ctx.fillText(t.askWho, 60, 306);
+
+    ctx.strokeStyle = getCol("#ef4444", 'mid'); ctx.strokeRect(50, 330, 300, 34);
+    ctx.fillStyle = getCol("#f87171", 'light'); ctx.font = "bold 11px 'Courier New'"; ctx.fillText(t.fight, 60, 351);
+
+    if (gameUnlocked) {
+        ctx.strokeStyle = getCol("#8b5cf6", 'mid'); ctx.strokeRect(50, 375, 300, 40); ctx.fillStyle = getCol("#a78bfa", 'light'); ctx.font = "bold 11px 'Courier New'"; ctx.fillText(t.playMinigame, 60, 400);
+    } else { ctx.fillStyle = getCol("#9ca3af", 'light'); ctx.font = "10px 'Courier New'"; ctx.fillText(t.lockMinigame, 52, 400); }
+}
+
+function drawBattleCat() {
+    let t = translations[currentLang];
+    ctx.fillStyle = "#0a0a14"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#ef4444"; ctx.font = "bold 12px 'Courier New'"; ctx.fillText(t.bossName, 40, 35);
+    ctx.fillStyle = "#1e1124"; ctx.fillRect(40, 45, 320, 14);
+    let catPct = catBattle.catHp / catBattle.catMaxHp;
+    ctx.fillStyle = "#ef4444"; ctx.fillRect(42, 47, catPct * 316, 10);
+
+    drawGatoEnorme(160, 80);
+
+    ctx.fillStyle = "#4ade80"; ctx.font = "bold 12px 'Courier New'"; ctx.fillText(t.playerName, 40, 215);
+    ctx.fillStyle = "#112417"; ctx.fillRect(40, 225, 200, 12);
+    let playPct = catBattle.playerHp / catBattle.playerMaxHp;
+    ctx.fillStyle = "#4ade80"; ctx.fillRect(42, 227, playPct * 196, 8);
+    ctx.fillText(catBattle.playerHp + " HP", 250, 236);
+
+    ctx.strokeStyle = "#4a5568"; ctx.lineWidth = 2; ctx.strokeRect(20, 260, 360, 70);
+    ctx.fillStyle = "#111827"; ctx.fillRect(22, 262, 356, 66);
+    ctx.fillStyle = "#fbbf24"; ctx.font = "bold 11px 'Courier New'";
+    
+    if (catBattle.battleLog.length > 40) {
+        ctx.fillText(catBattle.battleLog.substring(0, 40), 30, 288); ctx.fillText(catBattle.battleLog.substring(40), 30, 308);
+    } else { ctx.fillText(catBattle.battleLog, 30, 298); }
+
+    if (catBattle.turn === "PLAYER") {
+        ctx.fillStyle = "#ffffff"; ctx.font = "bold 12px 'Courier New'"; ctx.fillText(t.chooseCmd, 30, 350);
+        const opcoes = [t.whipTongue, t.shield, t.spare];
+        for(let i=0; i<opcoes.length; i++) {
+            ctx.fillStyle = (catBattle.selectedOption === i) ? "#2563eb" : "#1f2937"; ctx.fillRect(35, 365 + (i * 34), 330, 28);
+            ctx.fillStyle = "#ffffff"; ctx.fillText((catBattle.selectedOption === i ? "👉" : "  ") + opcoes[i], 45, 383 + (i * 34));
+        }
+    } else { ctx.fillStyle = "#f87171"; ctx.font = "bold 12px 'Courier New'"; ctx.fillText(t.waitingTurn, 85, 430); }
+}
+
+function draw() {
+    let t = translations[currentLang];
+    if (gameState === "SHOP") { drawShop(); return; }
+    if (gameState === "BATTLE_CAT") { drawBattleCat(); return; }
+
+    if (gameState === "MINIGAME") {
+        ctx.fillStyle = getCol("#1e293b", 'dark'); ctx.fillRect(0, 0, canvas.width, canvas.height); drawGatoEnorme(160, 50); 
+        ctx.fillStyle = getCol("#475569", 'mid');
+        for (let p of minigame.platforms) { ctx.fillRect(p.x, p.y, p.width, p.height); ctx.fillStyle = getCol("#64748b", 'light'); ctx.fillRect(p.x, p.y, p.width, 3); ctx.fillStyle = getCol("#475569", 'mid'); }
+        ctx.fillStyle = getCol("#94a3b8", 'light');
+        for (let l of minigame.ladders) { for (let j = 0; j < l.height; j += 12) { ctx.fillRect(l.x, l.y + j, l.width, 2); ctx.fillRect(l.x, l.y + j, 2, 12); ctx.fillRect(l.x + l.width - 2, l.y + j, 2, 12); } }
+        drawPlayer(player.x, player.y);
+        for (let y of minigame.yarns) { 
+            if (y.alertTicks > 0) { if (animationTimer % 10 < 6) { ctx.fillStyle = getCol("#ef4444", 'light'); ctx.font = "bold 20px 'Courier New'"; ctx.fillText("⚠️", y.x - 8, 150); } } 
+            else { ctx.fillStyle = getCol("#f43f5e", 'light'); ctx.beginPath(); ctx.arc(y.x, y.y, y.radius, 0, Math.PI*2); ctx.fill(); ctx.strokeStyle = getCol("#ffffff", 'mid'); ctx.lineWidth = 1.5; ctx.stroke(); }
+        }
+        ctx.fillStyle = getCol("#ffffff", 'light'); ctx.font = "bold 14px 'Courier New'"; ctx.fillText(t.yarns + minigame.score, 20, 180); 
+        ctx.fillStyle = getCol("#facc15", 'light'); ctx.fillText(t.progWorld + minigame.level, 20, 230);
+        let livesHearts = ""; for (let l = 0; l < minigame.lives; l++) livesHearts += "❤️";
+        ctx.fillStyle = getCol("#ef4444", 'mid'); ctx.fillText(t.lives + (livesHearts || "💀"), 20, 205);
+        ctx.fillStyle = getCol("#9ca3af", 'light'); ctx.font = "bold 11px 'Courier New'"; ctx.fillText(t.magnet, 20, 255); ctx.fillStyle = getCol("#374151", 'dark'); ctx.fillRect(145, 246, 100, 12);
+        if (minigame.magnetProgress >= 100) ctx.fillStyle = (animationTimer % 20 < 10) ? getCol("#38bdf8", 'light') : getCol("#0284c7", 'mid'); else ctx.fillStyle = getCol("#0284c7", 'mid');
+        ctx.fillRect(147, 248, (minigame.magnetProgress / 100) * 96, 8);
+        if (minigame.magnetProgress >= 100) { ctx.fillStyle = getCol("#4ade80", 'light'); ctx.fillText(t.activeJump, 250, 255); } else { ctx.fillStyle = getCol("#9ca3af", 'light'); ctx.fillText(" " + Math.floor(minigame.magnetProgress) + "%", 250, 255); }
+        if (minigame.gameOver) {
+            ctx.fillStyle = getCol("rgba(0,0,0,0.9)", 'dark'); ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = getCol("#f87171", 'light'); ctx.font = "bold 22px 'Courier New'"; ctx.fillText(t.miniOver, 110, 240);
+            ctx.fillStyle = "#fff"; ctx.font = "13px 'Courier New'"; ctx.fillText(t.miniReach + minigame.level, 120, 270); ctx.fillText(t.miniTotal + minigame.score, 120, 295); ctx.fillText(t.clickReset, 80, 340);
+        }
+        return;
+    }
+
+    ctx.fillStyle = getCol("#05070a", 'dark'); ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (gameState === "CLICK_TO_START") { ctx.fillStyle = getCol("#ffffff", 'light'); ctx.font = "bold 14px 'Courier New'"; ctx.fillText(t.clickStart, 65, 240); return; }
+    if (gameState === "INTRO") {
+        ctx.fillStyle = getCol("#ffffff", 'light'); ctx.font = "bold 18px 'Courier New'"; ctx.fillText(t.introTitle, 85, 50); drawBigFrog(80, 160); drawBigChicken(240, 165); ctx.strokeStyle = getCol("#ef4444", 'mid'); ctx.lineWidth = 3; ctx.strokeRect(60, 100, 270, 150);
+        ctx.fillStyle = getCol("#fcd34d", 'light'); ctx.font = "12px 'Courier New'"; ctx.fillText(t.intro1, 45, 300); ctx.fillText(t.intro2, 45, 325); ctx.fillText(t.intro3, 45, 350); ctx.fillText(t.intro4, 45, 375);
+        ctx.fillStyle = getCol("#4ade80", 'light'); ctx.fillText(t.introBtn, 75, 440); return;
+    }
+
+    ctx.strokeStyle = getCol("#1e293b", 'mid'); ctx.lineWidth = 1; for(let i=0; i<canvas.width; i+=40) { ctx.strokeRect(i, 0, 1, canvas.height); }
+    ctx.fillStyle = currentLevel === 4 ? getCol("#b91c1c", 'dark') : getCol("#dc2626", 'mid'); for (let p of platforms) { ctx.fillRect(p.x, p.y, p.width, p.height); ctx.fillStyle = getCol("#ef4444", 'light'); ctx.fillRect(p.x, p.y, p.width, 3); ctx.fillStyle = getCol("#dc2626", 'mid'); }
+    ctx.fillStyle = getCol("#60a5fa", 'light'); for (let l of ladders) { for (let j = 0; j < l.height; j += 12) { ctx.fillRect(l.x, l.y + j, l.width, 3); ctx.fillRect(l.x, l.y + j, 3, 12); ctx.fillRect(l.x + l.width - 3, l.y + j, 3, 12); } }
+    drawBigFrog(bigFrog.x, bigFrog.y); drawBigChicken(bigChicken.x, bigChicken.y); drawPlayer(player.x, player.y);
+    for (let b of projectiles) { ctx.fillStyle = getCol("#b45309", 'light'); ctx.beginPath(); ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2); ctx.fill(); }
+
+    ctx.fillStyle = getCol("#ffffff", 'light'); ctx.font = "bold 15px 'Courier New'"; ctx.fillText("LVL: " + currentLevel, 15, 30); ctx.fillText("PTS: " + score, 110, 30);
+    ctx.fillStyle = timeLeft < 5 ? getCol("#ff4757", 'light') : getCol("#34ece1", 'light'); ctx.fillText("TIME: " + timeLeft.toFixed(1) + "s", 250, 30);
+    if (hasHammer) { ctx.fillStyle = getCol("#fbbf24", 'light'); ctx.font = "11px 'Courier New'"; ctx.fillText("🔨 MARTELO ACT: " + hammerUses, 15, 55); }
+    
+    if (currentLevel === 4 && gameState === "PLAYING") { 
+        if (animationTimer % 30 < 15) { ctx.fillStyle = getCol("#facc15", 'light'); ctx.font = "bold 15px 'Courier New'"; ctx.fillText(t.warningChase, 50, 130); }
+        ctx.fillStyle = getCol("#ff0000", 'light'); ctx.font = "bold 12px 'Courier New'"; ctx.fillText(t.runFast, 45, 160); 
+    }
+    
+    if (gameState === "GAMEOVER") { ctx.fillStyle = getCol("rgba(0,0,0,0.88)", 'dark'); ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = getCol("#f87171", 'light'); ctx.font = "bold 26px 'Courier New'"; ctx.fillText(t.gameOver, 115, 220); ctx.fillStyle = "#fff"; ctx.font = "14px 'Courier New'"; ctx.fillText(t.restart, 80, 270); }
+    if (gameState === "VICTORY") { ctx.fillStyle = getCol("rgba(0,0,0,0.9)", 'dark'); ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = getCol("#4ade80", 'light'); ctx.font = "bold 24px 'Courier New'"; ctx.fillText(t.gameCleared, 110, 200); ctx.fillStyle = getCol("#fbbf24", 'light'); ctx.font = "12px 'Courier New'"; ctx.fillText(t.minigameUnl, 55, 240); ctx.fillStyle = "#fff"; ctx.font = "14px 'Courier New'"; ctx.fillText(t.clickPlayAgain, 90, 280); }
+}
+
+function drawBigFrog(x, y) {
+    ctx.fillStyle = getCol("#15803d", 'dark'); ctx.fillRect(x - 5, y + 25, 15, 25); ctx.fillRect(x + 60, y + 25, 15, 25); ctx.fillStyle = getCol("#22c55e", 'mid'); ctx.fillRect(x, y, 70, 50);
+    ctx.fillStyle = getCol("#166534", 'dark'); ctx.fillRect(x + 10, y + 15, 8, 8); ctx.fillRect(x + 50, y + 20, 10, 6); ctx.fillStyle = getCol("#22c55e", 'mid'); ctx.fillRect(x + 12, y - 8, 16, 10); ctx.fillRect(x + 42, y - 8, 16, 10);
+    ctx.fillStyle = getCol("#ffffff", 'light'); ctx.fillRect(x + 14, y - 6, 12, 8); ctx.fillRect(x + 44, y - 6, 12, 8); ctx.fillStyle = getCol("#000000", 'dark'); ctx.fillRect(x + 18, y - 4, 4, 4); ctx.fillRect(x + 48, y - 4, 4, 4);
+    if (bigFrog.frame === 0) { ctx.fillStyle = getCol("#14532d", 'dark'); ctx.fillRect(x + 15, y + 32, 40, 4); } else { ctx.fillStyle = getCol("#7f1d1d", 'dark'); ctx.fillRect(x + 15, y + 30, 40, 12); ctx.fillStyle = getCol("#f87171", 'light'); ctx.fillRect(x + 25, y + 36, 20, 6); }
+}
+
+function drawBigChicken(x, y) {
+    ctx.fillStyle = getCol("#ffffff", 'light'); ctx.fillRect(x, y + 10, 35, 30); ctx.fillRect(x + 10, y, 20, 15); ctx.fillStyle = getCol("#dc2626", 'mid'); ctx.fillRect(x + 15, y - 6, 10, 6);
+    ctx.fillStyle = getCol("#b45309", 'dark'); ctx.fillRect(x + 5, y + 35, 6, 10); ctx.fillRect(x + 22, y + 35, 6, 10); ctx.fillStyle = getCol("#000000", 'dark'); ctx.fillRect(x + 24, y + 4, 3, 3); ctx.fillStyle = getCol("#f59e0b", 'light');
+    if (bigChicken.frame === 0) { ctx.fillRect(x + 28, y + 6, 10, 4); } else { ctx.fillRect(x + 28, y + 3, 10, 3); ctx.fillRect(x + 28, y + 9, 8, 3); ctx.fillStyle = getCol("#ef4444", 'mid'); ctx.fillRect(x + 29, y + 6, 5, 3); }
+}
+
+function resetGame() { score = 0; currentLevel = 1; hasHammer = false; hammerUses = 0; loadLevel(1); gameState = "PLAYING"; noteIndex = 0; }
+
+function gameLoop(now) { update(now); draw(); requestAnimationFrame(gameLoop); }
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
